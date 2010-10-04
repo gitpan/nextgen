@@ -2,7 +2,7 @@ package nextgen;
 use strict;
 use warnings;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 ## 5.10.0 not forwards compat
 use v5.10.1;
@@ -23,7 +23,7 @@ use namespace::autoclean ();
 
 BEGIN {
 	if ( $0 eq '-e' ) {
-		eval "use oose ();";
+		eval "use oose;";
 	}
 }
 
@@ -102,6 +102,9 @@ In the future, L<nextgen> will include additional CPAN modules which have proven
 
 =back
 
+This module started out as a fork of L<Modern::Perl>, it wasn't modern enough
+and the author wasn't attentive enough to the needs for a more modern perl5.
+
 =head1 AUTHOR
 
 Evan Carroll, C<< <me at evancarroll.com> >>
@@ -143,15 +146,13 @@ L<http://search.cpan.org/dist/nextgen/>
 
 =head1 ACKNOWLEDGEMENTS
 
-=head2 Original Modern::Perl submitter
+=head2 Original Modern::Perl author
 
 chromatic, C<< <chromatic at wgz.org> >>
 
 =head2 RT Bug report submitters
 
 KSURI
-
-
 
 =head1 LICENSE AND COPYRIGHT
 

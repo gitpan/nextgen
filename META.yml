@@ -37,4 +37,4 @@ resources:
   homepage: http://www.evancarroll.com
   license: http://dev.perl.org/licenses/
   repository: git://github.com/EvanCarroll/nextgen.git
-version: 0.01
+version: 0.02
