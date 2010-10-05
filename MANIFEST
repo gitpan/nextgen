@@ -19,3 +19,4 @@ t/01_procedural.t
 t/02_DashE.t
 t/03_oo_nextgen.t
 t/03_oo_vanilla.t
+t/10_light_procedural.t

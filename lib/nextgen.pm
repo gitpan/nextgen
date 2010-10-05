@@ -2,7 +2,7 @@ package nextgen;
 use strict;
 use warnings;
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 ## 5.10.0 not forwards compat
 use v5.10.1;
@@ -22,18 +22,22 @@ use B::Hooks::EndOfScope qw(on_scope_end);
 use namespace::autoclean ();
 
 BEGIN {
-	if ( $0 eq '-e' ) {
-		eval "use oose;";
-	}
+	eval "use oose;" if $0 eq '-e';
 }
 
 sub import {
+	my ( $class, $args ) = shift;
+
+	my $procedural = 1 if grep(/:procedural/, @$args);
+
 	my $pkg = [caller]->[0];
 	my $caller = scalar caller;
 
 	## Moose will import warnings and strict by default
-	if ( $pkg ne 'main' ) {
-		Moose->import({ 'into' => $caller });
+	if ( !$procedural && $pkg ne 'main' ) {
+		Moose->import({ 'into' => $caller })
+			unless $pkg->can('meta')
+		;
 		mro::set_mro( $caller, 'c3' );
 	}
 	else {	
@@ -41,19 +45,21 @@ sub import {
 		strict->import();
 	}
 	
-	feature->import( ':5.10' );
+	feature->import(':5.10');
 	indirect->unimport(':fatal');
 	autodie->import();
 
-	## Cleanup if the package is a Moose::Object or has sub new
-	on_scope_end( sub {
-		no strict qw/refs/;
-		no warnings;
-		namespace::autoclean->import( -cleanee => $caller )
-			if defined *{$pkg.'::new'}{CODE}
-			|| $pkg->isa('Moose::Object')
-		;
-	} )
+	## Cleanup if the package has a new or meta (Moose::Roles)
+	unless ( $procedural ) {
+		on_scope_end( sub {
+			no strict qw/refs/;
+			no warnings;
+			namespace::autoclean->import( -cleanee => $caller )
+				if defined $pkg->can('new')
+				|| $pkg->can('meta')
+			;
+		} )
+	}
 
 }
 
@@ -79,24 +85,42 @@ For now, this module
 
 =over 12
 
-=item asserts 5.10.1+ is loaded -- 5.10.0 is unsupported and not forwards
-      compatable because of smart match.
+=item Perl assertion
 
-=item uses the vanilla L<strict>, and L<warnings> pragmas
+asserts 5.10.1+ is loaded -- 5.10.0 is unsupported and not forwards
+  compatable because of smart match.
 
-=item adds Perl 5.10 L<features>
+=item strict and warnings
 
-=item disables indirect method syntax via L<indirect>
+uses the vanilla L<strict>, and L<warnings> pragmas
 
-=item throws fatal exceptions in a sane fashion for CORE functions via L<autodie>
+=item features.pm
 
-=item C3 method resolution order via L<mro>
+adds Perl 5.10 L<features>
 
-=item adds L<Moose> if the package isn't main
+=item indirect.pm
 
-=item uses L<oose>.pm if the program is run via C<perl -e>, or C<perl -E>
+disables indirect method syntax via L<indirect>
 
-=item cleans up the class via L<namespace::autoclean> if the module has a constructor (sub new).
+=item autodie.pm
+
+throws fatal exceptions in a sane fashion for CORE functions via L<autodie>
+
+=item mro.pm
+
+C3 method resolution order via L<mro>
+
+=item Moose.pm
+
+adds L<Moose> if the package isn't main
+
+=item oose.pm
+
+uses L<oose>.pm if the program is run via C<perl -e>, or C<perl -E>
+
+=item namespace/autoclean.pm
+
+cleans up the class via L<namespace::autoclean> if the module has a constructor (sub new).
 
 In the future, L<nextgen> will include additional CPAN modules which have proven useful and stable.
 
@@ -104,6 +128,13 @@ In the future, L<nextgen> will include additional CPAN modules which have proven
 
 This module started out as a fork of L<Modern::Perl>, it wasn't modern enough
 and the author wasn't attentive enough to the needs for a more modern perl5.
+
+=head1 PROCEDURAL CODE
+
+If you wish to write L<nextgen> module that doesn't assume non-"main" packages
+are object-oriented classes, then use the B<:procedural> token:
+
+    use nextgen ':procedural'
 
 =head1 AUTHOR
 
