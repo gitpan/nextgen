@@ -2,7 +2,7 @@ package nextgen;
 use strict;
 use warnings;
 
-our $VERSION = '0.03';
+our $VERSION = '0.05';
 
 ## 5.10.0 not forwards compat
 use v5.10.1;
@@ -21,47 +21,98 @@ use Moose ();
 use B::Hooks::EndOfScope qw(on_scope_end);
 use namespace::autoclean ();
 
-BEGIN {
-	eval "use oose;" if $0 eq '-e';
-}
+use nextgen::blacklist;
 
 sub import {
-	my ( $class, $args ) = shift;
+	my ( $class, %args ) = @_;
 
-	my $procedural = 1 if grep(/:procedural/, @$args);
+	my @caller = caller;
+	my $pkg = $caller[0];
 
-	my $pkg = [caller]->[0];
-	my $caller = scalar caller;
+	## nextgen->import() is a noop in pkg main using perl -Mnextgen -e''
+	if (
+		$caller[2] == 0 # line
+		&& $caller[1] eq '-e' && $0 eq '-e'
+	) {
+		return ()
+	}
+
+	my $procedural = (
+		$pkg eq 'main'
+		|| defined $args{'mode'} && $args{'mode'} ~~ qr/:procedural/
+	) ? 1 : 0
+	;
+
+	feature->import(':5.10');
+	indirect->unimport(':fatal');
+	autodie->import();
 
 	## Moose will import warnings and strict by default
 	if ( !$procedural && $pkg ne 'main' ) {
-		Moose->import({ 'into' => $caller })
+		mro::set_mro( $pkg, 'c3' );
+		
+		Moose->import({ 'into' => $pkg })
 			unless $pkg->can('meta')
 		;
-		mro::set_mro( $caller, 'c3' );
+		
+		## Cleanup if the package has a new or meta (Moose::Roles)
+		on_scope_end( sub {
+			no strict qw/refs/;
+			no warnings;
+			namespace::autoclean->import( -cleanee => $pkg )
+				if defined $pkg->can('new')
+				|| defined $pkg->can('meta')
+			;
+		} )
+	
 	}
 	else {	
 		warnings->import();
 		strict->import();
 	}
+		
+	state $nextgen_default_blacklist = {
+		'base.pm' => {
+			replacement => 'parent'
+		}
+		, 'Class/Accessor.pm' => {
+			replacement => 'Moose'
+		}
+		, 'Class/Accessor/Fast.pm' => {
+			replacement => 'Moose'
+		}
+		, 'Class/Accessor/Faster.pm' => {
+			replacement => 'Moose'
+		}
+		, 'NEXT.pm' => {
+			replacement => 'mro'
+		}
+		, 'strict.pm'    => {
+			replacement => 'nextgen'
+		}
+		, 'warnings.pm'  => {
+			replacement => 'nextgen'
+		}
+		, 'autodie.pm'   => {
+			replacement => 'nextgen'
+		}
+	};
+
+	nextgen::blacklist->import(
+		$nextgen_default_blacklist
+		, { -callee => $pkg }
+	);
 	
-	feature->import(':5.10');
-	indirect->unimport(':fatal');
-	autodie->import();
-
-	## Cleanup if the package has a new or meta (Moose::Roles)
-	unless ( $procedural ) {
-		on_scope_end( sub {
-			no strict qw/refs/;
-			no warnings;
-			namespace::autoclean->import( -cleanee => $caller )
-				if defined $pkg->can('new')
-				|| $pkg->can('meta')
-			;
-		} )
-	}
-
 }
+
+
+
+## This is here for a reason (and I prefer to use oose.pm, even though I could
+## just as well reimpliment it).
+## http://search.cpan.org/~dconway/Filter-Simple/lib/Filter/Simple.pm#Using_Filter::Simple_with_an_explicit_import_subroutine
+use if $0 eq '-e', "Filter::Simple" => sub { s/^/use oose; \n use nextgen;/ };
+
+1;
 
 __END__
 
@@ -81,7 +132,43 @@ instead write only one:
 
     use nextgen;
 
-For now, this module
+
+But the joy doens't stop there, here are some examples of the command line.
+
+    perl -Mnextgen -E'say Class->new->meta->name'
+    
+    # You can see warnings is on:
+    perl -Mnextgen -E'(undef) + 5'
+    
+    # And, strict
+    perl -Mnextgen -E'my $foo = "bar"; $$foo = 4; say $$foo'
+    
+    #	And, it wouldn't be nextgen if this was allowed.	
+    perl -Mnextgen -E'use NEXT;'
+    
+    # Or, this
+    perl -Mnextgen -MNEXT -e1
+
+But the joy doesn't stop there, here are some examples in module.
+
+    package Foo;
+    ## easier than strict, warnings, indirect, autodie, mro-c3, Moose, and blacklist
+    use nextgen;
+    
+    ## vanilla Moose to follow
+    has "foo" => ( isa => "Str", is => "rw" )
+    
+    package main;
+    use nextgen;
+    
+    ## this works
+    my $o = Foo->new;
+    
+    ## this wouldn't
+    ## main is understood to be mode => [qw/procedural])
+    my $o = main->new
+
+For now, this module just does
 
 =over 12
 
@@ -134,7 +221,11 @@ and the author wasn't attentive enough to the needs for a more modern perl5.
 If you wish to write L<nextgen> module that doesn't assume non-"main" packages
 are object-oriented classes, then use the B<:procedural> token:
 
-    use nextgen ':procedural'
+    use nextgen mode => [qw(:procedural)]
+
+    or even
+
+    use nextgen mode => qw(:procedural)
 
 =head1 AUTHOR
 
@@ -194,7 +285,6 @@ under the terms of either: the GNU General Public License as published
 by the Free Software Foundation; or the Artistic License.
 
 See http://dev.perl.org/licenses/ for more information.
-
 
 =cut
 

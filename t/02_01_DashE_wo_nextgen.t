@@ -1,5 +1,4 @@
 #!/usr/bin/env perl
-
 use Test::More tests => 2;
 
 BEGIN
@@ -8,9 +7,10 @@ BEGIN
 	nextgen->import();
 }
 
-package Class;
-use nextgen qw/:procedural/;
-
 eval { Class->new };
-Test::More::is( $@, '', ':procedural ' );
+like (
+	$@
+	, qr/Can't locate object method "new" via package "Class"/
+	, "No source oose.pm source filter on real for $0"
+);
 
