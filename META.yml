@@ -36,7 +36,8 @@ requires:
   utf8: 0
   warnings: 0
 resources:
-  homepage: http://www.evancarroll.com
+  bugtracker: http://github.com/EvanCarroll/nextgen/issues
+  homepage: 'http://github.com/EvanCarroll/nextgen '
   license: http://dev.perl.org/licenses/
   repository: git://github.com/EvanCarroll/nextgen.git
-version: 0.05
+version: 0.06
